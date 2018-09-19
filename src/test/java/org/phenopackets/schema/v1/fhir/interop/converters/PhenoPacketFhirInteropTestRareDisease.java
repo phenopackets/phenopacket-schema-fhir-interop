@@ -4,11 +4,11 @@ import ca.uhn.fhir.context.FhirContext;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.util.JsonFormat;
-import org.hl7.fhir.r4.model.*;
+import org.hl7.fhir.dstu3.model.*;
 import org.junit.jupiter.api.Test;
 import org.phenopackets.schema.v1.PhenoPacket;
 import org.phenopackets.schema.v1.core.*;
-import org.phenopackets.schema.v1.io.PhenopacketFormat;
+import org.phenopackets.schema.v1.io.PhenoPacketFormat;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -224,7 +224,7 @@ public class PhenoPacketFhirInteropTestRareDisease {
                 .setVcf(vcf)
                 .build();
 
-        System.out.println(PhenopacketFormat.toYaml(rareDiseaseSampleData));
+        System.out.println(PhenoPacketFormat.toYaml(rareDiseaseSampleData));
 
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.COLLECTION);

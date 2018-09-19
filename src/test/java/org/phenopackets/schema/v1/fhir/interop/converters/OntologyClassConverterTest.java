@@ -1,7 +1,7 @@
 package org.phenopackets.schema.v1.fhir.interop.converters;
 
 import com.google.common.collect.ImmutableMap;
-import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.dstu3.model.CodeableConcept;
 import org.junit.jupiter.api.Test;
 import org.phenopackets.schema.v1.core.OntologyClass;
 

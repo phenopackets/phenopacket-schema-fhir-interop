@@ -2,11 +2,11 @@ package org.phenopackets.schema.v1.fhir.interop.converters;
 
 import ca.uhn.fhir.context.FhirContext;
 import com.google.protobuf.Timestamp;
-import org.hl7.fhir.r4.model.*;
+import org.hl7.fhir.dstu3.model.*;
 import org.junit.jupiter.api.Test;
 import org.phenopackets.schema.v1.PhenoPacket;
 import org.phenopackets.schema.v1.core.*;
-import org.phenopackets.schema.v1.io.PhenopacketFormat;
+import org.phenopackets.schema.v1.io.PhenoPacketFormat;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -147,7 +147,7 @@ public class PhenoPacketConverterTest {
                 .setVcf(vcf)
                 .build();
 
-        System.out.println(PhenopacketFormat.toYaml(rareDiseaseSampleData));
+        System.out.println(PhenoPacketFormat.toYaml(rareDiseaseSampleData));
 
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.COLLECTION);
@@ -163,7 +163,7 @@ public class PhenoPacketConverterTest {
         bundle.addEntry().setResource(familyMemberHistory);
 
         //add the mother and pedigree
-        String bundleJson = FhirContext.forR4().newJsonParser().setPrettyPrint(true).encodeResourceToString(bundle);
+        String bundleJson = FhirContext.forDstu3().newJsonParser().setPrettyPrint(true).encodeResourceToString(bundle);
         System.out.println(bundleJson);
 
         for (Bundle.BundleEntryComponent bundleEntryComponent : bundle.getEntry()) {
