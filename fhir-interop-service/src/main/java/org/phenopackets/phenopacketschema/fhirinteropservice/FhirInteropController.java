@@ -31,7 +31,7 @@ public class FhirInteropController {
             produces = MediaType.APPLICATION_JSON_UTF8_VALUE
     )
     public PhenoPacket convertToPhenoPacket(@RequestBody String input) {
-        logger.info("Received input {}", input);
+        logger.debug("Received input {}", input);
         Bundle bundle = (Bundle) jsonParser.parseResource(input);
         return new FhirConverter().toPhenoPacket(bundle);
     }
