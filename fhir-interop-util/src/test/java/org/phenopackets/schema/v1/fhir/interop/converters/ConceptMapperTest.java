@@ -5,7 +5,6 @@ import org.hl7.fhir.dstu3.model.CodeableConcept;
 import org.junit.jupiter.api.Test;
 import org.phenopackets.schema.v1.core.OntologyClass;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 
@@ -17,13 +16,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * @author Jules Jacobsen <j.jacobsen@qmul.ac.uk>
  */
-class OntologyClassConverterTest {
+class ConceptMapperTest {
 
     @Test
     void setUpFromMap() {
         Map<String, String> curieMappings = ImmutableMap.of("HP", "http://purl.obolibrary.org/obo/HP_");
 
-        OntologyClassConverter instance = OntologyClassConverter.fromMap(curieMappings);
+        ConceptMapper instance = ConceptMapper.fromMap(curieMappings);
 
         OntologyClass hpoOntologyClass = OntologyClass.newBuilder().setId("HP:0012828").setLabel("Severe").build();
         CodeableConcept result = instance.toCodeableConcept(hpoOntologyClass);
@@ -35,7 +34,7 @@ class OntologyClassConverterTest {
         CodeableConcept codeableConcept = ConverterUtil.codeableConcept("http://purl.obolibrary.org/obo/hp.owl", "HP:0012828", "Severe");
 
         OntologyClass expected = OntologyClass.newBuilder().setId("HP:0012828").setLabel("Severe").build();
-        OntologyClassConverter instance = OntologyClassConverter.fromMap(Collections.emptyMap());
+        ConceptMapper instance = ConceptMapper.fromMap(Collections.emptyMap());
 
         assertThat(instance.toOntologyClass(codeableConcept), equalTo(expected));
     }

@@ -53,6 +53,9 @@ public class ConverterUtil {
                 logger.error("Unable to get Condition::onsetStringType {}", e);
             }
         }
+        if (condition.hasEvidence()) {
+            //TODO: handle evidence
+        }
         return phenotypeBuilder.build();
     }
 

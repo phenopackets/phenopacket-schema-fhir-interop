@@ -16,22 +16,22 @@ import java.util.stream.Collectors;
  *
  * @author Jules Jacobsen <j.jacobsen@qmul.ac.uk>
  */
-public class OntologyClassConverter {
+public class ConceptMapper {
 
     private final CurieUtil curieUtil;
     private final Map<String, String> resourcePrefixMappings;
 
-    private OntologyClassConverter(Map<String, String> resourcePrefixMappings) {
+    private ConceptMapper(Map<String, String> resourcePrefixMappings) {
         this.resourcePrefixMappings = resourcePrefixMappings;
         curieUtil = new CurieUtil(resourcePrefixMappings);
     }
 
-    public static OntologyClassConverter fromMetaData(MetaData metaData) {
+    public static ConceptMapper fromMetaData(MetaData metaData) {
         Map<String, String> resourcePrefixMappings = metaData.getResourcesList()
                 .stream()
                 .collect(Collectors.toMap(Resource::getNamespacePrefix, Resource::getUrl, (a, b) -> b));
 
-        return new OntologyClassConverter(resourcePrefixMappings);
+        return new ConceptMapper(resourcePrefixMappings);
     }
 
     /**
@@ -40,12 +40,12 @@ public class OntologyClassConverter {
      * @param resourceCurieMappings
      * @return
      */
-    public static OntologyClassConverter fromMap(Map<String, String> resourceCurieMappings) {
+    public static ConceptMapper fromMap(Map<String, String> resourceCurieMappings) {
         // Requires a CURIE map?  https://github.com/monarch-initiative/dipper/blob/master/dipper/curie_map.yaml
         // and a system map e.g. "http://purl.obolibrary.org/obo/hp.owl" : "HP"
         // then can map a CodeableConcept or an OntologyClass to an expanded URI if they are using CURIEs as their id,
         // which is the recommendation in Phenopackets.
-        return new OntologyClassConverter(resourceCurieMappings);
+        return new ConceptMapper(resourceCurieMappings);
     }
 
     public CodeableConcept toCodeableConcept(OntologyClass ontologyClass) {
@@ -65,7 +65,7 @@ public class OntologyClassConverter {
     }
 
     public OntologyClass toOntologyClass(CodeableConcept codeableConcept) {
-        Coding coding = codeableConcept.getCodingFirstRep(); //should expect many...
+        Coding coding = codeableConcept.getCodingFirstRep();
         String system = coding.getSystem();
         return toOntologyClass(coding);
 
