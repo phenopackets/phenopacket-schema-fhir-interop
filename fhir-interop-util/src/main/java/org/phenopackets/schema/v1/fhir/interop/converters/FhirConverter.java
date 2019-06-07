@@ -1,19 +1,19 @@
 package org.phenopackets.schema.v1.fhir.interop.converters;
 
-import org.hl7.fhir.dstu3.model.*;
-import org.phenopackets.schema.v1.PhenoPacket;
-import org.phenopackets.schema.v1.core.Individual;
-import org.phenopackets.schema.v1.core.MetaData;
-import org.phenopackets.schema.v1.fhir.interop.converters.fhir.IndividualExtractor;
-import org.phenopackets.schema.v1.fhir.interop.converters.fhir.MetaDataExtractor;
+import org.hl7.fhir.r4.model.*;
+import org.phenopackets.schema.v1.Cohort;
+import org.phenopackets.schema.v1.Family;
+import org.phenopackets.schema.v1.Phenopacket;
+import org.phenopackets.schema.v1.fhir.interop.converters.fhir.PhenopacketExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.groupingBy;
-import static java.util.stream.Collectors.toMap;
 
 /**
  * Converter for converting a FHIR bundle to a Phenopacket.
@@ -29,9 +29,7 @@ public class FhirConverter {
     public FhirConverter() {
     }
 
-    public PhenoPacket toPhenoPacket(Bundle bundle) {
-
-        MetaDataExtractor metaDataExtractor = new MetaDataExtractor("FHIR converter");
+    public Phenopacket toPhenopacket(Bundle bundle) {
 
         Map<ResourceType, List<Resource>> resourcesByType = bundle.getEntry()
                 .stream()
@@ -42,29 +40,36 @@ public class FhirConverter {
         //extract patient conditions
         List<Condition> patientConditions = getPatientConditionsFromResources(resourcesByType);
 
-        //convert patient condition coding to metadata
-        metaDataExtractor.extractPatientMetaData(patients);
-        metaDataExtractor.extractConditionMetaData(patientConditions);
-
-        IndividualExtractor individualExtractor = new IndividualExtractor();
-        List<Individual> individuals = individualExtractor.extractIndividuals(patients, patientConditions);
-
-        PhenoPacket.Builder phenoPacketBuilder = PhenoPacket.newBuilder();
-
-        if (individuals.size() == 1) {
-            phenoPacketBuilder.setPatient(individuals.get(0));
-        } else if (individuals.size() > 1) {
-            logger.warn("Found {} patients in this bundle - not sure who the main subject is so creating individuals", individuals.size());
-            phenoPacketBuilder.addAllIndividuals(individuals);
+        if (patients.size() > 1) {
+            logger.warn("Found {} patients in this bundle - not sure who the main subject is so returning first", patients
+                    .size());
         }
 
-        if (metaDataExtractor.hasResources()) {
-            MetaData metaData = metaDataExtractor.buildMetaData();
-            // perhaps it would be better to pass in the PhenoPacketBuilder? Would also work for the Individuals
-            phenoPacketBuilder.setMetaData(metaData);
-        }
+        PhenopacketExtractor phenopacketExtractor = new PhenopacketExtractor();
 
-        return phenoPacketBuilder.build();
+        return patients.stream()
+                .map(patient -> phenopacketExtractor.extractPhenopacket(patient, patientConditions))
+                .findFirst()
+                .orElse(Phenopacket.getDefaultInstance());
+    }
+
+//    Bundle-> Phenopacket:
+//    Takes first patient and creates phenopacket. Explodes/warns if more than one patient is present.
+//    Bundle -> Cohort:
+//    Extracts all patients, converts to phenopackets, adds to Cohort.
+//            Bundle -> Family
+//    Extracts patients…. Needs pedigree checking/conversion logic.
+
+    public Cohort toCohort(Bundle bundle) {
+        return null;
+    }
+
+    public Family toFamily(Bundle bundle) {
+        // TODO Does FHIR have a means of indicating a proband? If not this won't work.
+        // although could do it with a bundle containing a single Patient and a FamilyMemberHistoryGenetic
+        // however we still don't know who tha proband is unless we use some heuristic to pick the patient with the
+        // largest number of Conditions, which is pure guesswork.
+        return null;
     }
 
     private List<Patient> getPatientsFromResources(Map<ResourceType, List<Resource>> resourcesByType) {

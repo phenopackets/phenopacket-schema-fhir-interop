@@ -1,11 +1,11 @@
 package org.phenopackets.schema.v1.fhir.interop.converters;
 
 import org.hl7.fhir.exceptions.FHIRException;
-import org.hl7.fhir.dstu3.model.CodeableConcept;
-import org.hl7.fhir.dstu3.model.Coding;
-import org.hl7.fhir.dstu3.model.Condition;
+import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.r4.model.Coding;
+import org.hl7.fhir.r4.model.Condition;
 import org.phenopackets.schema.v1.core.OntologyClass;
-import org.phenopackets.schema.v1.core.Phenotype;
+import org.phenopackets.schema.v1.core.PhenotypicFeature;
 import org.phenopackets.schema.v1.core.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,13 +34,13 @@ public class ConverterUtil {
                 .build();
     }
 
-    public static Phenotype makePhenotype(Condition condition) {
+    public static PhenotypicFeature makePhenotypicFeature(Condition condition) {
         if (!condition.hasCode()) {
             logger.warn("Condition has no code - skipping");
-            return Phenotype.getDefaultInstance();
+            return PhenotypicFeature.getDefaultInstance();
         }
         Coding coding = condition.getCode().getCodingFirstRep();
-        Phenotype.Builder phenotypeBuilder = Phenotype.newBuilder();
+        PhenotypicFeature.Builder phenotypeBuilder = PhenotypicFeature.newBuilder();
         phenotypeBuilder.setType(ConverterUtil.ontologyClass(coding.getCode(), coding.getDisplay()));
         if (condition.hasSeverity()) {
             CodeableConcept severity = condition.getSeverity();

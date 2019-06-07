@@ -1,7 +1,7 @@
 package org.phenopackets.schema.v1.fhir.interop.converters;
 
-import org.hl7.fhir.dstu3.model.CodeableConcept;
-import org.hl7.fhir.dstu3.model.Coding;
+import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.r4.model.Coding;
 import org.phenopackets.schema.v1.core.MetaData;
 import org.phenopackets.schema.v1.core.OntologyClass;
 import org.phenopackets.schema.v1.core.Resource;

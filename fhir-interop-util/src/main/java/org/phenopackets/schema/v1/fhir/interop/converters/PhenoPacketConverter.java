@@ -1,11 +1,9 @@
 package org.phenopackets.schema.v1.fhir.interop.converters;
 
-import org.hl7.fhir.dstu3.model.*;
-import org.phenopackets.schema.v1.PhenoPacket;
-import org.phenopackets.schema.v1.core.Biosample;
-import org.phenopackets.schema.v1.core.Individual;
-import org.phenopackets.schema.v1.core.OntologyClass;
-import org.phenopackets.schema.v1.core.Phenotype;
+import org.hl7.fhir.r4.model.*;
+import org.hl7.fhir.r4.model.Resource;
+import org.phenopackets.schema.v1.Phenopacket;
+import org.phenopackets.schema.v1.core.*;
 
 import java.time.Instant;
 import java.util.*;
@@ -26,8 +24,8 @@ public class PhenoPacketConverter {
     private PhenoPacketConverter() {
     }
 
-    public static Bundle toFhirBundle(PhenoPacket phenoPacket) {
-        if (PhenoPacket.getDefaultInstance().equals(phenoPacket)) {
+    public static Bundle toFhirBundle(Phenopacket phenoPacket) {
+        if (Phenopacket.getDefaultInstance().equals(phenoPacket)) {
             return new Bundle();
         }
         Bundle bundle = new Bundle();
@@ -39,19 +37,17 @@ public class PhenoPacketConverter {
         return bundle;
     }
 
-    private static List<Resource> extractResourcesFromPhenoPacket(PhenoPacket phenoPacket) {
+    private static List<Resource> extractResourcesFromPhenoPacket(Phenopacket phenoPacket) {
         List<Resource> resources = new ArrayList<>();
-        if (phenoPacket.hasPatient()) {
-            Individual individual = phenoPacket.getPatient();
-            resources.addAll(createResourcesForIndividual(individual));
-        }
-        for (Individual individual : phenoPacket.getIndividualsList()) {
-            resources.addAll(createResourcesForIndividual(individual));
+        if (phenoPacket.hasSubject()) {
+            Individual individual = phenoPacket.getSubject();
+            Patient patient = createPatient(individual);
+            resources.add(patient);
+            for (PhenotypicFeature phenotype : phenoPacket.getPhenotypicFeaturesList()) {
+                resources.add(createPatientCondition(phenotype, patient));
+            }
         }
 
-        if (phenoPacket.hasPedigree()){
-            // make a pedigree
-        }
         for (Biosample biosample : phenoPacket.getBiosamplesList()) {
             resources.add(createSpecimen(biosample));
         }
@@ -59,22 +55,12 @@ public class PhenoPacketConverter {
         return resources;
     }
 
-    private static List<Resource> createResourcesForIndividual(Individual individual) {
-        List<Resource> resources = new ArrayList<>();
-        Patient patient = createPatient(individual);
-        resources.add(patient);
-        for (Phenotype phenotype : individual.getPhenotypesList()) {
-            resources.add(createPatientCondition(phenotype, patient));
-        }
-        return resources;
-    }
-
     private static Resource createSpecimen(Biosample biosample) {
         Specimen specimen = new Specimen();
         specimen.setId(biosample.getId());
         biosample.getTaxonomy();
-        biosample.getPhenotypesList();// What to do with these? Specimen only has one type...
-        OntologyClass sampleType = biosample.getType();
+        biosample.getPhenotypicFeaturesList();// What to do with these? Specimen only has one type...
+        OntologyClass sampleType = biosample.getSampledTissue();
         // TODO:
         // look-up against MetaData object and use the CureUtil to create long and short-form identifiers
         // this can then convert any OntologyClass into a CodeableConcept.
@@ -87,11 +73,10 @@ public class PhenoPacketConverter {
     public static Patient createPatient(Individual individual) {
         Patient patient = new Patient();
         patient.setId(individual.getId());
-        //TODO: make generic for handling timestamp or Age wth "P1Y3M" etc.
-        //TODO: remember! all fields are optional
-        patient.setBirthDate(Date.from(Instant.ofEpochSecond(individual.getDateOfBirth().getSeconds())));
-        Enumerations.AdministrativeGender administrativeGender = convertPatoToAdministrativeGender(individual.getSex());
-        patient.setGender(administrativeGender);
+        if (individual.getDateOfBirth().isInitialized()) {
+            patient.setBirthDate(Date.from(Instant.ofEpochSecond(individual.getDateOfBirth().getSeconds())));
+        }
+        patient.setGender(asAdministrativeGender(individual.getSex()));
         return patient;
     }
 
@@ -101,7 +86,7 @@ public class PhenoPacketConverter {
      * @param patient
      * @return
      */
-    public static Condition createPatientCondition(Phenotype phenotype, Patient patient) {
+    public static Condition createPatientCondition(PhenotypicFeature phenotype, Patient patient) {
         Condition condition = new Condition();
         //TODO: Use CurieUtil to convert the CURIE to a full system
         condition.setCode(codeableConcept(HPO_SYSTEM, phenotype.getType().getId(), phenotype.getType().getLabel()));
@@ -111,35 +96,26 @@ public class PhenoPacketConverter {
         condition.setSubject(new Reference(patient));
 
         if (phenotype.getNegated()){
-            condition.setVerificationStatus(Condition.ConditionVerificationStatus.REFUTED);
+            // absolutely no idea how to do this in R4
+            // DSTU3 was condition.setVerificationStatus(Condition.ConditionVerificationStatus.REFUTED);
+            condition.setVerificationStatus(codeableConcept("http://terminology.hl7.org/CodeSystem/condition-ver-status", "refuted", "refuted"));
         }
         return condition;
     }
 
-    public static Observation createSexObservation(Individual individual, Patient patient) {
-        OntologyClass sexClasss = individual.getSex();
-        //TODO: needs to do a look-up against the metadata object to get the system for this. Right now this is hard-coded to use pato.owl.
-        CodeableConcept sexConcept = codeableConcept("http://purl.obolibrary.org/obo/pato.owl", sexClasss.getId(), sexClasss.getLabel());
-        Observation observation = new Observation();
-        observation.setCode(sexConcept);
-        observation.setSubject(new Reference(patient));
-        return observation;
-    }
-
-    // This is horribly brittle - might be safest to bin this and just use the observation or directly model sex as an Enum
-    private static Enumerations.AdministrativeGender convertPatoToAdministrativeGender(OntologyClass sex) {
-        if (!sex.getId().startsWith("PATO") || sex.getId().isEmpty()) {
-            return Enumerations.AdministrativeGender.NULL;
-        }
-        switch (sex.getId()) {
-            case "PATO_0000383":
-            case "PATO:0000383":
-                return Enumerations.AdministrativeGender.FEMALE;
-            case "PATO_0000384":
-            case "PATO:0000384":
+    private static Enumerations.AdministrativeGender asAdministrativeGender(Sex sex) {
+        switch (sex) {
+            case MALE:
                 return Enumerations.AdministrativeGender.MALE;
-            default:
+            case FEMALE:
+                return Enumerations.AdministrativeGender.FEMALE;
+            case OTHER_SEX:
+                return Enumerations.AdministrativeGender.OTHER;
+            case UNKNOWN_SEX:
                 return Enumerations.AdministrativeGender.UNKNOWN;
+            case UNRECOGNIZED:
+            default:
+                return Enumerations.AdministrativeGender.NULL;
         }
     }
 

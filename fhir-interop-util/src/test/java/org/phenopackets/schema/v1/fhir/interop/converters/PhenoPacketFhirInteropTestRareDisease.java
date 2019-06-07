@@ -4,11 +4,11 @@ import ca.uhn.fhir.context.FhirContext;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.util.JsonFormat;
-import org.hl7.fhir.dstu3.model.*;
+import org.hl7.fhir.r4.model.*;
 import org.junit.jupiter.api.Test;
-import org.phenopackets.schema.v1.PhenoPacket;
+import org.phenopackets.schema.v1.Family;
+import org.phenopackets.schema.v1.Phenopacket;
 import org.phenopackets.schema.v1.core.*;
-import org.phenopackets.schema.v1.io.PhenoPacketFormat;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -17,6 +17,7 @@ import java.util.Date;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.phenopackets.schema.v1.fhir.interop.converters.ConverterUtil.codeableConcept;
 import static org.phenopackets.schema.v1.fhir.interop.converters.ConverterUtil.ontologyClass;
 
 
@@ -34,7 +35,7 @@ public class PhenoPacketFhirInteropTestRareDisease {
     private static final String FATHER_ID = "FATHER:1";
     private static final String SISTER_ID = "SISTER:1";
 
-    private static final Phenotype abnormalPhenotype = Phenotype.newBuilder()
+    private static final PhenotypicFeature abnormalPhenotype = PhenotypicFeature.newBuilder()
             .setType(ontologyClass("HP:0000118", "Phenotypic abnormality"))
             .build();
 
@@ -58,14 +59,14 @@ public class PhenoPacketFhirInteropTestRareDisease {
         Pedigree.Person mother = Pedigree.Person.newBuilder()
                 .setFamilyId(FAMILY_ID)
                 .setIndividualId(MOTHER_ID)
-                .setSex(Pedigree.Person.Sex.FEMALE)
+                .setSex(Sex.FEMALE)
                 .setAffectedStatus(Pedigree.Person.AffectedStatus.AFFECTED)
                 .build();
 
         Pedigree.Person father = Pedigree.Person.newBuilder()
                 .setFamilyId(FAMILY_ID)
                 .setIndividualId(FATHER_ID)
-                .setSex(Pedigree.Person.Sex.MALE)
+                .setSex(Sex.MALE)
                 .setAffectedStatus(Pedigree.Person.AffectedStatus.UNAFFECTED)
                 .build();
 
@@ -74,7 +75,7 @@ public class PhenoPacketFhirInteropTestRareDisease {
                 .setIndividualId(PROBAND_ID)
                 .setMaternalId(MOTHER_ID)
                 .setPaternalId(FATHER_ID)
-                .setSex(Pedigree.Person.Sex.MALE)
+                .setSex(Sex.MALE)
                 .setAffectedStatus(Pedigree.Person.AffectedStatus.AFFECTED)
                 .build();
 
@@ -86,66 +87,87 @@ public class PhenoPacketFhirInteropTestRareDisease {
     }
 
     @Test
-    public void uninterpretedRareDiseaseSample() throws Exception {
+    public void rareDiseaseFamily() throws Exception {
 
-        Individual proband = Individual.newBuilder()
-                .setSex(FEMALE)
+        Individual probandIndividual = Individual.newBuilder()
+                .setSex(Sex.FEMALE)
                 .setId(PROBAND_ID)
                 .setDateOfBirth(Timestamp.newBuilder().setSeconds(Instant.parse("2018-01-01T00:00:00Z").getEpochSecond()).build())
-                .addPhenotypes(abnormalPhenotype.toBuilder()
-                        .addModifiers(ontologyClass("HP:0012828", "Severe"))
-                        .build())
                 .build();
 
-        Individual mother = Individual.newBuilder()
-                .setSex(FEMALE)
+        PhenotypicFeature probandPhenotype = abnormalPhenotype.toBuilder()
+                .setSeverity(ontologyClass("HP:0012828", "Severe"))
+                .setClassOfOnset(ontologyClass("HP:0003577", "Congenital onset"))
+                .build();
+
+        Phenopacket proband = Phenopacket.newBuilder()
+                .setSubject(probandIndividual)
+                .addPhenotypicFeatures(probandPhenotype)
+                .build();
+
+        Individual motherIndividual = Individual.newBuilder()
+                .setSex(Sex.FEMALE)
                 .setId(MOTHER_ID)
                 .setDateOfBirth(Timestamp.newBuilder().setSeconds(Instant.parse("1977-05-25T00:00:00Z").getEpochSecond()).build())
-                .addPhenotypes(abnormalPhenotype.toBuilder()
+                .build();
+
+        Phenopacket mother = Phenopacket.newBuilder()
+                .setSubject(motherIndividual)
+                .addPhenotypicFeatures(abnormalPhenotype.toBuilder()
                         .addModifiers(ontologyClass("HP:0012826", "Moderate"))
                         .build())
                 .build();
 
-        Individual father = Individual.newBuilder()
-                .setSex(MALE)
+        Individual fatherIndividual = Individual.newBuilder()
+                .setSex(Sex.MALE)
                 .setId(FATHER_ID)
+                .build();
+
+        Phenopacket father = Phenopacket.newBuilder()
+                .setSubject(fatherIndividual)
                 .build();
 
         Pedigree trio = createPedigree();
 
-        File vcf = File.newBuilder().setPath("/path/to/vcf.gz").build();
-        PhenoPacket rareDiseaseSampleData = PhenoPacket.newBuilder()
-                .setId("STUDY_ID:0000123")
-                .setPedigree(trio)
-                .setPatient(proband)
-                .addIndividuals(mother)
-                .addIndividuals(father)
-                .setGenomeAssembly(GenomeAssembly.GRCH_37)
-                .setVcf(vcf)
+        HtsFile htsFile = HtsFile.newBuilder()
+                .setFile(File.newBuilder().setPath("/path/to/vcf.gz").build())
+                .setGenomeAssembly("GRCh37")
                 .build();
 
-        System.out.println(JsonFormat.printer().print(rareDiseaseSampleData));
-        assertThat(rareDiseaseSampleData.getId(), equalTo("STUDY_ID:0000123"));
-        assertThat(rareDiseaseSampleData.getPedigree(), equalTo(trio));
-        assertThat(rareDiseaseSampleData.getPatient(), equalTo(proband));
-        assertThat(rareDiseaseSampleData.getIndividualsList(), equalTo(ImmutableList.of(mother, father)));
-        assertThat(rareDiseaseSampleData.getGenomeAssembly(), equalTo(GenomeAssembly.GRCH_37));
-        assertThat(rareDiseaseSampleData.getVcf(), equalTo(vcf));
+        Family rareDiseaseFamily = Family.newBuilder()
+                .setId("STUDY_ID:0000123")
+                .setPedigree(trio)
+                .setProband(proband)
+                .addRelatives(mother)
+                .addRelatives(father)
+                .addHtsFiles(htsFile)
+                .build();
+
+        System.out.println(JsonFormat.printer().print(rareDiseaseFamily));
+        assertThat(rareDiseaseFamily.getId(), equalTo("STUDY_ID:0000123"));
+        assertThat(rareDiseaseFamily.getProband(), equalTo(proband));
+        assertThat(rareDiseaseFamily.getRelativesList(), equalTo(ImmutableList.of(mother, father)));
+        assertThat(rareDiseaseFamily.getPedigree(), equalTo(trio));
+        assertThat(rareDiseaseFamily.getHtsFiles(0), equalTo(htsFile));
     }
 
     @Test
     public void toFhirBundle() throws Exception {
-        Phenotype probandPhenotype = abnormalPhenotype.toBuilder()
+        PhenotypicFeature probandPhenotype = abnormalPhenotype.toBuilder()
                 .setSeverity(ontologyClass("HP:0012828", "Severe"))
                 .setClassOfOnset(ontologyClass("HP:0003577", "Congenital onset"))
                 .build();
 
         Instant probandBirthInstant = Instant.parse("2018-01-01T00:00:00Z");
         Individual proband = Individual.newBuilder()
-                .setSex(MALE)
+                .setSex(Sex.MALE)
                 .setId(PROBAND_ID)
                 .setDateOfBirth(Timestamp.newBuilder().setSeconds(probandBirthInstant.getEpochSecond()).build())
-                .addPhenotypes(probandPhenotype)
+                .build();
+
+        Phenopacket probandPacket = Phenopacket.newBuilder()
+                .setSubject(proband)
+                .addPhenotypicFeatures(probandPhenotype)
                 .build();
 
         //FHIR
@@ -154,11 +176,6 @@ public class PhenoPacketFhirInteropTestRareDisease {
         assertThat(probandPatient.getId(), equalTo(PROBAND_ID));
         assertThat(probandPatient.getGender(), equalTo(Enumerations.AdministrativeGender.MALE));
 
-        Observation probandSex = createSexObservation(proband, probandPatient);
-        assertThat(probandSex.getCode().getText(), equalTo(FHIR_MALE.getText()));
-        assertThat(probandSex.getCode().getCodingFirstRep().getCode(), equalTo(MALE.getId()));
-        assertThat(probandSex.getCode().getCodingFirstRep().getDisplay(), equalTo(MALE.getLabel()));
-
         //eurgh! This fails - not the same as what went in...
         //assertThat(probandSex.getSubject().equalsDeep(probandPatient), is(true));
 
@@ -166,22 +183,24 @@ public class PhenoPacketFhirInteropTestRareDisease {
         assertThat(probandCondition.getCode().getCodingFirstRep().getCode(), equalTo(probandPhenotype.getType().getId()));
         assertThat(probandCondition.getCode().getCodingFirstRep().getDisplay(), equalTo(probandPhenotype.getType().getLabel()));
 
-        Phenotype motherPhenotype = abnormalPhenotype.toBuilder()
+        PhenotypicFeature motherPhenotype = abnormalPhenotype.toBuilder()
                 .setSeverity(ontologyClass("HP:0012826", "Moderate"))
                 .build();
 
         Instant motherBirthInstant = Instant.parse("1977-05-25T00:00:00Z");
         Individual mother = Individual.newBuilder()
-                .setSex(FEMALE)
+                .setSex(Sex.FEMALE)
                 .setId(MOTHER_ID)
                 .setDateOfBirth(Timestamp.newBuilder().setSeconds(motherBirthInstant.getEpochSecond()).build())
-                .addPhenotypes(motherPhenotype)
+                .build();
+
+        Phenopacket motherPacket = Phenopacket.newBuilder()
+                .setSubject(mother)
+                .addPhenotypicFeatures(motherPhenotype)
                 .build();
 
         Patient motherPatient = PhenoPacketConverter.createPatient(mother);
-        Observation motherSex = createSexObservation(mother, motherPatient);
         Condition motherCondition = createPatientCondition(motherPhenotype, motherPatient);
-
 
         Pedigree trio = createPedigree();
 
@@ -196,32 +215,29 @@ public class PhenoPacketFhirInteropTestRareDisease {
         familyMemberHistory.setExtension(Collections.singletonList(extension));
 
         File vcf = File.newBuilder().setPath("/path/to/vcf.gz").build();
-        PhenoPacket rareDiseaseSampleData = PhenoPacket.newBuilder()
+        Family rareDiseaseSampleData = Family.newBuilder()
                 .setId("STUDY_ID:0000123")
                 .setPedigree(trio)
-                .setPatient(proband)
-                .addIndividuals(mother)
-                .setGenomeAssembly(GenomeAssembly.GRCH_37)
-                .setVcf(vcf)
+                .setProband(probandPacket)
+                .addRelatives(motherPacket)
+                .addHtsFiles(HtsFile.newBuilder().setGenomeAssembly("GRCh37").setFile(vcf).build())
                 .build();
 
-        System.out.println(PhenoPacketFormat.toYaml(rareDiseaseSampleData));
+        System.out.println(JsonFormat.printer().print(rareDiseaseSampleData));
 
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.COLLECTION);
         bundle.setId("STUDY_ID:0000123");
         bundle.addEntry().setResource(probandPatient);
-        bundle.addEntry().setResource(probandSex);
         bundle.addEntry().setResource(probandCondition);
 
         bundle.addEntry().setResource(motherPatient);
-        bundle.addEntry().setResource(motherSex);
         bundle.addEntry().setResource(motherCondition);
 
         bundle.addEntry().setResource(familyMemberHistory);
 
         //add the mother and pedigree
-        String bundleJson = FhirContext.forDstu3().newJsonParser().setPrettyPrint(true).encodeResourceToString(bundle);
+        String bundleJson = FhirContext.forR4().newJsonParser().setPrettyPrint(true).encodeResourceToString(bundle);
         System.out.println(bundleJson);
 
         for (Bundle.BundleEntryComponent bundleEntryComponent : bundle.getEntry()) {
@@ -235,7 +251,7 @@ public class PhenoPacketFhirInteropTestRareDisease {
      * @param patient
      * @return
      */
-    private static Condition createPatientCondition(Phenotype phenotype, Patient patient) {
+    private static Condition createPatientCondition(PhenotypicFeature phenotype, Patient patient) {
         Condition condition = new Condition().setCode(hpoConcept(phenotype.getType().getId(), phenotype.getType().getLabel()));
         condition.setSeverity(hpoConcept(phenotype.getSeverity().getId(), phenotype.getSeverity().getLabel()));
         // Fhir has oneof datetime, Age, Period, String - For this example we're going to use a string
@@ -243,16 +259,8 @@ public class PhenoPacketFhirInteropTestRareDisease {
         condition.setSubject(new Reference(patient));
 
         if (phenotype.getNegated()){
-            condition.setVerificationStatus(Condition.ConditionVerificationStatus.REFUTED);
+            condition.setVerificationStatus(codeableConcept("http://terminology.hl7.org/CodeSystem/condition-ver-status", "refuted", "refuted"));
         }
         return condition;
     }
-
-    private Observation createSexObservation(Individual individual, Patient patient) {
-        OntologyClass sexClasss = individual.getSex();
-        //TODO: needs to do a look-up against the metadata object to get the system for this. Right now this is hard-coded to use pato.owl.
-        CodeableConcept sexConcept = codeableConcept("http://purl.obolibrary.org/obo/pato.owl", sexClasss.getId(), sexClasss.getLabel());
-        return new Observation().setCode(sexConcept).setSubject(new Reference(patient));
-    }
-
 }

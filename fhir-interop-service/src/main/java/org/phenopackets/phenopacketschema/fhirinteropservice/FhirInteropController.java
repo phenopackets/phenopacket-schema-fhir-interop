@@ -2,8 +2,8 @@ package org.phenopackets.phenopacketschema.fhirinteropservice;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.parser.IParser;
-import org.hl7.fhir.dstu3.model.Bundle;
-import org.phenopackets.schema.v1.PhenoPacket;
+import org.hl7.fhir.r4.model.Bundle;
+import org.phenopackets.schema.v1.Phenopacket;
 import org.phenopackets.schema.v1.fhir.interop.converters.FhirConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +24,7 @@ public class FhirInteropController {
     private final IParser jsonParser;
 
     public FhirInteropController() {
-        this.jsonParser = FhirContext.forDstu3().newJsonParser();
+        this.jsonParser = FhirContext.forR4().newJsonParser();
     }
 
     @CrossOrigin
@@ -32,10 +32,10 @@ public class FhirInteropController {
             consumes = MediaType.APPLICATION_JSON_UTF8_VALUE,
             produces = MediaType.APPLICATION_JSON_UTF8_VALUE
     )
-    public PhenoPacket convertToPhenoPacket(@RequestBody String input) {
+    public Phenopacket convertToPhenoPacket(@RequestBody String input) {
         logger.debug("Received input {}", input);
         Bundle bundle = (Bundle) jsonParser.parseResource(input);
-        return new FhirConverter().toPhenoPacket(bundle);
+        return new FhirConverter().toPhenopacket(bundle);
     }
 
 }

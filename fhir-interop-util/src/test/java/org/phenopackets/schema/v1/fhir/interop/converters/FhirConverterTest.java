@@ -1,14 +1,12 @@
 package org.phenopackets.schema.v1.fhir.interop.converters;
 
 import com.google.protobuf.Timestamp;
-import org.hl7.fhir.dstu3.model.*;
+import com.google.protobuf.util.JsonFormat;
+import org.hl7.fhir.r4.model.*;
 import org.junit.jupiter.api.Test;
-import org.phenopackets.schema.v1.PhenoPacket;
-import org.phenopackets.schema.v1.core.Individual;
-import org.phenopackets.schema.v1.core.MetaData;
-import org.phenopackets.schema.v1.core.Phenotype;
+import org.phenopackets.schema.v1.Phenopacket;
+import org.phenopackets.schema.v1.core.*;
 import org.phenopackets.schema.v1.core.Resource;
-import org.phenopackets.schema.v1.io.PhenoPacketFormat;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -28,9 +26,9 @@ class FhirConverterTest {
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.COLLECTION);
 
-        PhenoPacket converted = new FhirConverter().toPhenoPacket(bundle);
+        Phenopacket converted = new FhirConverter().toPhenopacket(bundle);
 
-        assertThat(converted, equalTo(PhenoPacket.getDefaultInstance()));
+        assertThat(converted, equalTo(Phenopacket.getDefaultInstance()));
     }
 
     @Test
@@ -43,9 +41,9 @@ class FhirConverterTest {
 
         bundle.addEntry().setResource(patient);
 
-        PhenoPacket converted = new FhirConverter().toPhenoPacket(bundle);
+        Phenopacket converted = new FhirConverter().toPhenopacket(bundle);
 
-        assertThat(converted.hasPatient(), is(true));
+        assertThat(converted.hasSubject(), is(true));
     }
 
     @Test
@@ -55,16 +53,19 @@ class FhirConverterTest {
 
         Patient patient = new Patient();
         patient.setId("PATIENT#1");
+        patient.setBirthDate(Date.from(Instant.parse("1972-12-03T10:15:30.00Z")));
+        patient.addName(new HumanName().setText("Zaphod").setFamily("Beeblebrox"));
         bundle.addEntry().setResource(patient);
 
         Patient secondPatient = new Patient();
         secondPatient.setId("PATIENT#2");
         bundle.addEntry().setResource(secondPatient);
 
-        PhenoPacket converted = new FhirConverter().toPhenoPacket(bundle);
-        System.out.println(PhenoPacketFormat.toYaml(converted));
-        assertThat(converted.hasPatient(), is(false));
-        assertThat(converted.getIndividualsCount(), equalTo(2));
+        // TODO: Should this throw an exception - too many patients? Or return the first?
+        Phenopacket converted = new FhirConverter().toPhenopacket(bundle);
+        System.out.println(JsonFormat.printer().print(converted));
+        assertThat(converted.getSubject().getId(), equalTo("PATIENT#1"));
+        assertThat(converted.getSubject().getDateOfBirth(), equalTo(Timestamp.newBuilder().setSeconds(Instant.parse("1972-12-03T10:15:30.00Z").getEpochSecond()).build()));
     }
 
     @Test
@@ -85,7 +86,7 @@ class FhirConverterTest {
 //        condition1.setOnset(new StringType(""));
         condition1.setSubject(new Reference(patient));
 
-        Phenotype phenotype1 = Phenotype.newBuilder()
+        PhenotypicFeature phenotype1 = PhenotypicFeature.newBuilder()
                 .setType(ConverterUtil.ontologyClass("a:1", "a wibble"))
                 .setSeverity(ConverterUtil.ontologyClass("b:1", "b wibble"))
                 .build();
@@ -97,7 +98,7 @@ class FhirConverterTest {
 //        condition2.setOnset(new StringType(""));
         condition2.setSubject(new Reference(patient));
 
-        Phenotype phenotype2 = Phenotype.newBuilder()
+        PhenotypicFeature phenotype2 = PhenotypicFeature.newBuilder()
                 .setType(ConverterUtil.ontologyClass("a:2", "a frood"))
                 .setSeverity(ConverterUtil.ontologyClass("b:2", "b frood"))
                 .build();
@@ -111,32 +112,25 @@ class FhirConverterTest {
         Individual individual = Individual.newBuilder()
                 .setId("PATIENT#1")
                 .setDateOfBirth(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).build())
-                .setSex(ConverterUtil.ontologyClass("PATO:0000384", "male"))
-                .addPhenotypes(phenotype1)
-                .addPhenotypes(phenotype2)
+                .setSex(Sex.MALE)
                 .build();
 
         MetaData metaData = MetaData.newBuilder()
                 .setCreatedBy("FHIR converter")
-                .addResources(Resource.newBuilder()
-                        .setId("pato")
-                        .setNamespacePrefix("PATO")
-                        .setUrl("http://purl.obolibrary.org/obo/pato.owl")
-                        .setVersion("2018-08-14")
-                        .setName("Phenotype And Trait Ontology")
-                        .build())
                 .addResources(Resource.newBuilder().setId("a").setNamespacePrefix("a").setUrl("a.url").build())
                 .addResources(Resource.newBuilder().setId("b").setNamespacePrefix("b").setUrl("b.url").build())
                 .build();
 
-        PhenoPacket expected = PhenoPacket.newBuilder()
-                .setPatient(individual)
+        Phenopacket expected = Phenopacket.newBuilder()
+                .setSubject(individual)
+                .addPhenotypicFeatures(phenotype1)
+                .addPhenotypicFeatures(phenotype2)
                 .setMetaData(metaData)
                 .build();
 
-        PhenoPacket converted = new FhirConverter().toPhenoPacket(bundle);
-        System.out.println(PhenoPacketFormat.toYaml(converted));
-        assertThat(converted.getPatient(), equalTo(expected.getPatient()));
+        Phenopacket converted = new FhirConverter().toPhenopacket(bundle);
+        System.out.println(JsonFormat.printer().print(converted));
+        assertThat(converted.getSubject(), equalTo(expected.getSubject()));
         // metadata contains a created timestamp which might not always agree and make the test fail unpredictably
         // so just test the resources and created by
         assertThat(converted.getMetaData().getCreatedBy(), equalTo(expected.getMetaData().getCreatedBy()));

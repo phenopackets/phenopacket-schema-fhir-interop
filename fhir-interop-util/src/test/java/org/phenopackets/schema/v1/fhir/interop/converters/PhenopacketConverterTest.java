@@ -2,11 +2,11 @@ package org.phenopackets.schema.v1.fhir.interop.converters;
 
 import ca.uhn.fhir.context.FhirContext;
 import com.google.protobuf.Timestamp;
-import org.hl7.fhir.dstu3.model.*;
+import com.google.protobuf.util.JsonFormat;
+import org.hl7.fhir.r4.model.*;
 import org.junit.jupiter.api.Test;
-import org.phenopackets.schema.v1.PhenoPacket;
+import org.phenopackets.schema.v1.Phenopacket;
 import org.phenopackets.schema.v1.core.*;
-import org.phenopackets.schema.v1.io.PhenoPacketFormat;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -20,7 +20,7 @@ import static org.phenopackets.schema.v1.fhir.interop.converters.ConverterUtil.o
 /**
  * @author Jules Jacobsen <j.jacobsen@qmul.ac.uk>
  */
-public class PhenoPacketConverterTest {
+public class PhenopacketConverterTest {
 
     private static final String PROBAND_ID = "PROBAND:1";
     private static final String MOTHER_ID = "MOTHER:1";
@@ -35,13 +35,13 @@ public class PhenoPacketConverterTest {
     private Pedigree createPedigree() {
         Pedigree.Person mother = Pedigree.Person.newBuilder()
                 .setIndividualId(MOTHER_ID)
-                .setSex(Pedigree.Person.Sex.FEMALE)
+                .setSex(Sex.FEMALE)
                 .setAffectedStatus(Pedigree.Person.AffectedStatus.AFFECTED)
                 .build();
 
         Pedigree.Person father = Pedigree.Person.newBuilder()
                 .setIndividualId(FATHER_ID)
-                .setSex(Pedigree.Person.Sex.MALE)
+                .setSex(Sex.MALE)
                 .setAffectedStatus(Pedigree.Person.AffectedStatus.UNAFFECTED)
                 .build();
 
@@ -49,7 +49,7 @@ public class PhenoPacketConverterTest {
                 .setIndividualId(PROBAND_ID)
                 .setMaternalId(MOTHER_ID)
                 .setPaternalId(FATHER_ID)
-                .setSex(Pedigree.Person.Sex.MALE)
+                .setSex(Sex.MALE)
                 .setAffectedStatus(Pedigree.Person.AffectedStatus.AFFECTED)
                 .build();
 
@@ -60,13 +60,13 @@ public class PhenoPacketConverterTest {
                 .build();
     }
 
-    private static final Phenotype abnormalPhenotype = Phenotype.newBuilder()
+    private static final PhenotypicFeature abnormalPhenotype = PhenotypicFeature.newBuilder()
             .setType(ontologyClass("HP:0000118", "Phenotypic abnormality"))
             .build();
 
     @Test
     public void emptyPhenopacketReturnsEmptyBundle() {
-        PhenoPacket phenoPacket = PhenoPacket.getDefaultInstance();
+        Phenopacket phenoPacket = Phenopacket.getDefaultInstance();
         Bundle result = PhenoPacketConverter.toFhirBundle(phenoPacket);
 
         assertThat(result.isEmpty(), is(true));
@@ -76,17 +76,21 @@ public class PhenoPacketConverterTest {
 
     @Test
     public void toFhirBundle() throws Exception {
-        Phenotype probandPhenotype = abnormalPhenotype.toBuilder()
+        PhenotypicFeature probandPhenotype = abnormalPhenotype.toBuilder()
                 .setSeverity(ontologyClass("HP:0012828", "Severe"))
                 .setClassOfOnset(ontologyClass("HP:0003577", "Congenital onset"))
                 .build();
 
         Instant probandBirthInstant = Instant.parse("2018-01-01T00:00:00Z");
         Individual proband = Individual.newBuilder()
-                .setSex(MALE)
+                .setSex(Sex.MALE)
                 .setId(PROBAND_ID)
                 .setDateOfBirth(Timestamp.newBuilder().setSeconds(probandBirthInstant.getEpochSecond()).build())
-                .addPhenotypes(probandPhenotype)
+                .build();
+
+        Phenopacket probandPhenopacket = Phenopacket.newBuilder()
+                .setSubject(proband)
+                .addPhenotypicFeatures(probandPhenotype)
                 .build();
 
         //FHIR
@@ -95,35 +99,29 @@ public class PhenoPacketConverterTest {
         assertThat(probandPatient.getId(), equalTo(PROBAND_ID));
         assertThat(probandPatient.getGender(), equalTo(Enumerations.AdministrativeGender.MALE));
 
-        Observation probandSex = PhenoPacketConverter.createSexObservation(proband, probandPatient);
-
-        assertThat(probandSex.getCode().getText(), equalTo(FHIR_MALE.getText()));
-        assertThat(probandSex.getCode().getCodingFirstRep().getCode(), equalTo(MALE.getId()));
-        assertThat(probandSex.getCode().getCodingFirstRep().getDisplay(), equalTo(MALE.getLabel()));
-        assertThat(probandSex.hasSubject(), is(true));
-        // don't know how to test this any other way
-        assertThat(new Reference(probandPatient).equalsDeep(probandSex.getSubject()), is(true));
-
         Condition probandCondition = PhenoPacketConverter.createPatientCondition(probandPhenotype, probandPatient);
         assertThat(probandCondition.getCode().getCodingFirstRep().getCode(), equalTo(probandPhenotype.getType().getId()));
         assertThat(probandCondition.getCode().getCodingFirstRep().getDisplay(), equalTo(probandPhenotype.getType().getLabel()));
 
-        Phenotype motherPhenotype = abnormalPhenotype.toBuilder()
+        PhenotypicFeature motherPhenotype = abnormalPhenotype.toBuilder()
                 .setSeverity(ontologyClass("HP:0012826", "Moderate"))
                 .build();
 
         Instant motherBirthInstant = Instant.parse("1977-05-25T00:00:00Z");
         Individual mother = Individual.newBuilder()
-                .setSex(FEMALE)
+                .setSex(Sex.FEMALE)
                 .setId(MOTHER_ID)
                 .setDateOfBirth(Timestamp.newBuilder().setSeconds(motherBirthInstant.getEpochSecond()).build())
-                .addPhenotypes(motherPhenotype)
                 .build();
 
-        Patient motherPatient = PhenoPacketConverter.createPatient(mother);
-        Observation motherSex = PhenoPacketConverter.createSexObservation(mother, motherPatient);
-        Condition motherCondition = PhenoPacketConverter.createPatientCondition(motherPhenotype, motherPatient);
+        Phenopacket motherPhenopacket = Phenopacket.newBuilder()
+                .setSubject(mother)
+                .addPhenotypicFeatures(motherPhenotype)
+                .build();
 
+
+        Patient motherPatient = PhenoPacketConverter.createPatient(mother);
+        Condition motherCondition = PhenoPacketConverter.createPatientCondition(motherPhenotype, motherPatient);
 
         Pedigree trio = createPedigree();
 
@@ -138,32 +136,33 @@ public class PhenoPacketConverterTest {
         familyMemberHistory.setExtension(Collections.singletonList(extension));
 
         File vcf = File.newBuilder().setPath("/path/to/vcf.gz").build();
-        PhenoPacket rareDiseaseSampleData = PhenoPacket.newBuilder()
+        HtsFile vcfFile = HtsFile.newBuilder().setFile(vcf).setGenomeAssembly("GRCh37").build();
+
+        Phenopacket rareDiseaseSampleData = Phenopacket.newBuilder()
                 .setId("STUDY_ID:0000123")
-                .setPedigree(trio)
-                .setPatient(proband)
-                .addIndividuals(mother)
-                .setGenomeAssembly(GenomeAssembly.GRCH_37)
-                .setVcf(vcf)
+//                .setPedigree(trio)
+                .setSubject(proband)
+//                .addIndividuals(mother)
+//                .setGenomeAssembly(GenomeAssembly.GRCH_37)
+//                .setVcf(vcf)
+                .addHtsFiles(vcfFile)
                 .build();
 
-        System.out.println(PhenoPacketFormat.toYaml(rareDiseaseSampleData));
+        System.out.println(JsonFormat.printer().print(rareDiseaseSampleData));
 
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.COLLECTION);
         bundle.setId("STUDY_ID:0000123");
         bundle.addEntry().setResource(probandPatient);
-        bundle.addEntry().setResource(probandSex);
         bundle.addEntry().setResource(probandCondition);
 
         bundle.addEntry().setResource(motherPatient);
-        bundle.addEntry().setResource(motherSex);
         bundle.addEntry().setResource(motherCondition);
 
         bundle.addEntry().setResource(familyMemberHistory);
 
         //add the mother and pedigree
-        String bundleJson = FhirContext.forDstu3().newJsonParser().setPrettyPrint(true).encodeResourceToString(bundle);
+        String bundleJson = FhirContext.forR4().newJsonParser().setPrettyPrint(true).encodeResourceToString(bundle);
         System.out.println(bundleJson);
 
         for (Bundle.BundleEntryComponent bundleEntryComponent : bundle.getEntry()) {
